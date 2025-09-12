@@ -6,20 +6,20 @@ slug: aspect-cli
 
 # Aspect CLI overview
 
-The Aspect CLI is a Bazel wrapper built on top of Bazelisk. Created to improve Bazel’s functionality and add new features and extensibility.
+Aspect CLI is a Bazel wrapper developed atop Bazelisk. A development created to enhance the functionality of Bazel and introduce additional features and extensibility.
 
 ## The problem it solves
 
-Bazel was designed for Google's internal workflows. Outside of Google, many companies create custom wrappers and scripts. This adapts Bazel to their engineering culture and tech stack. These scripts often become difficult to maintain. Each team spends time creating and supporting its own solution. This leads to developer frustration and technical debt.
+Bazel started as a tool for Google's internal workflow. Most other companies have bespoke wrappers and scripts. This makes Bazel a good fit within their tech stack and engineering culture. These scripts then become unmaintainable. Each team spends the time building and maintaining its own solution. This is a source of developer frustration and technical debt. 
 
 ## The solution
 
-The Aspect CLI provides a robust, open-source solution. Instead of using improvised bash scripts, organizations can use the Aspect CLI. It is a stable and extensible alternative. It improves the developer experience and reduces the need for custom scripts.
+The Aspect CLI provides a robust, open-source option. Instead of patching together bash scripts, businesses can use the Aspect CLI. It is a reliable and adaptable replacement. It improves developer experience and reduces the usage of tailored scripts.
 
 ## What it does
 
-The Aspect CLI runs all standard Bazel commands. It also adds new commands, such as `print` and `docs`. It offers extensibility features. These features allow developers to create plugins to automate common tasks.
+The Aspect CLI runs all standard Bazel commands. It also adds new commands, such as `print` and `docs`. It offers extensibility mechanisms. These mechanisms allow developers to create plugins that can automate routine tasks.
 
 ## Installation and availability
 
-The Aspect CLI is available for macOS and Linux. A Windows version is planned. The source code is on GitHub under an Apache 2 license.
+Aspect CLI is available on macOS and Linux. A Windows distribution will be released. The source code resides on GitHub with an Apache 2 license.
