@@ -1,1 +1,1 @@
-# Aspect CLI $ Aspect Workflows docs
+# Aspect CLI & Aspect Workflows docs
