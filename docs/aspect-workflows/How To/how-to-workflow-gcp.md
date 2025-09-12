@@ -5,7 +5,7 @@ slug: {slug}
 audience: "Developer, DevOps Engineer, or Cloud Architect with basic knowledge of cloud services."
 ---
 
-# Configure your first GCP project with Terraform
+# Deploy Aspect Workflows on GCP
 
 This guide shows you how to configure a Terraform project to manage resources in Google Cloud (GCP). You'll learn how to find the correct project information, initialize Terraform with a remote backend, and fix common errors.
 

@@ -5,7 +5,7 @@ slug: /guides/create-hello-world-web-app
 audience: "JavaScript developer with basic knowledge of command-line tools."
 ---
 
-# Create a "Hello, World" web application
+# Build an example app
 
 This guide explains how to create a "Hello, World" web application. You'll use the **Aspect CLI**, **Bazel**, and `pnpm`. Follow these steps to set up a new project, configure its build process, and run a local web server.
 
