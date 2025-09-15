@@ -124,4 +124,4 @@ Start your web server using the Aspect CLI.
 
 * **Aspect CLI**: [https://github.com/aspect-build/aspect-cli](https://github.com/aspect-build/aspect-cli)
 * **Bazel**: [https://bazel.build/](https://bazel.build/)
-* **`pnpm`**: [https://pnpm.io/](https://pnpm.io/)
+* **pnpm**: [https://pnpm.io/](https://pnpm.io/)

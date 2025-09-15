@@ -1,13 +1,9 @@
 ---
-title: "How to configure your first GCP project with Terraform"
-description: "Configure a Terraform project to manage resources in Google Cloud, from initial setup to running the first commands."
-slug: {slug}
+title: "Deploy Aspect Workflows on GCP"
+description: "This guide shows you how to deploy Aspect Workflows on Google Cloud Platform (GCP)."
+slug: /get-started/deploy-workflows/deploy-gcp
 audience: "Developer, DevOps Engineer, or Cloud Architect with basic knowledge of cloud services."
 ---
-
-# Deploy Aspect Workflows on GCP
-
-This guide shows you how to configure a Terraform project to manage resources in Google Cloud (GCP). You'll learn how to find the correct project information, initialize Terraform with a remote backend, and fix common errors.
 
 ## Prerequisites
 
@@ -15,15 +11,21 @@ Before you begin, ensure you have the following tools installed and APIs enabled
 
 ### Tool installation
 
-  * **Terraform CLI:** [Installation instructions](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
-  * **Google Cloud SDK (`gcloud`):** [Installation instructions](https://cloud.google.com/sdk/docs/install)
-  * A Google Cloud project already created.
-  * A Google Cloud Storage bucket to use as a backend.
+* Terraform CLI or OpenTofu CLI (version >= 1.4.0)
+    * [Installation instructions](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
+    * [OpenTofu installation instructions](https://docs.opentofu.io/getting-started/install/)
+* A GCP account with:
+    * [Google Cloud SDK](https://cloud.google.com/sdk/docs/install), `gcloud`, installed and initialized.
+    * A [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects)
+    * A [Google Cloud Storage bucket](https://cloud.google.com/storage/docs/creating-buckets) to use as a backend.
+
+<Note>
+If you are new to Terraform or OpenTofu, run `terraform init` or `tofu init` before you begin.
+</Note>
 
 ### Enable required services
 
-Enable the following APIs in your project:
-
+You'll have to enable the following APIs in your project:
   * [Cloud Build API](https://console.cloud.google.com/apis/library/cloudbuild.googleapis.com)
   * [Cloud Functions API](https://console.cloud.google.com/apis/library/cloudfunctions.googleapis.com)
   * [Cloud Resource Manager API](https://console.cloud.google.com/marketplace/product/google/cloudresourcemanager.googleapis.com)
@@ -38,12 +40,11 @@ Enable the following APIs in your project:
   * [Storage Transfer API](https://console.cloud.google.com/apis/library/storagetransfer.googleapis.com)
   * [Workflows API](https://console.cloud.google.com/apis/library/workflows.googleapis.com)
 
-:::note
+<Note>
 Aspect Workflows uses the Storage Transfer API to copy bootstrap scripts and other files required by Workflows.
-:::
+</Note>
 
 If you plan to enable the external remote endpoint or Web UI, you also need to enable the following APIs:
-
   * [API Keys API](https://console.cloud.google.com/apis/api/apikeys.googleapis.com)
   * [Cloud DNS API](https://console.cloud.google.com/marketplace/product/google/dns.googleapis.com)
   * [Cloud Identity-Aware Proxy API](https://console.cloud.google.com/apis/library/iap.googleapis.com)
@@ -77,7 +78,22 @@ Run the following command. It opens a browser window for you to log in and autho
 gcloud auth application-default login
 ```
 
-### 3. Configure the `main.tf` file
+### 3. Terraform ans service account permissions
+
+You'll also need to grant the service account permissions to Terraform to manage your GCP resources.
+To grant permissions, run the following command:
+
+```bash
+gcloud projects add-iam-policy-binding YOUR-PROJECT-ID --member serviceAccount:YOUR-SERVICE-ACCOUNT-EMAIL --role roles/owner
+```
+
+You'll also need to grant yourself a role that allows creating custom roles.
+
+```bash
+gcloud projects add-iam-policy-binding <PROJECT_ID> --member=user:<YOUR_EMAIL> --role=roles/iam.roleAdmin
+```
+
+### 4. Configure the `main.tf` file
 
 The `main.tf` file contains your Terraform configuration, including the backend (where your infrastructure state is saved) and the provider (which interacts with GCP).
 
@@ -103,17 +119,186 @@ locals {
   ]
 }
 
-provider "google" {
-  project = local.project
-  region  = local.region
-}
-
-provider "google-beta" {
-  project = local.project
-  region  = local.region
-}
-
+(...)
 ```
+
+### 5. Configure CI/CD
+
+To configure CI/CD, you must add the Aspect Workflows Terraform module to your CI/CD pipeline. For this, you can use the following code on the `workflows.tf` file for any of the four CI/CD providers:
+
+<CodeGroup>
+
+```tf GitHub Actions
+  hosts = ["gha"]
+
+  # Github Actions runner groups
+  # WORKFLOWS_TEMPLATE: Once the Aspect Workflows GitHub actions land in your repository, run the following command
+  # using the GitHub CLI to determine the workflow ID for the `gha_workflow_ids` fields below:
+  # gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/<org>/<repo>/actions/workflows
+  # See https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#list-repository-workflows for more info.
+  gha_runner_groups = {
+    # The `default` runner group is used for general bazel tasks such as build & test.
+    default = {
+      agent_idle_timeout_min    = 120
+      gh_repo                   = "YOUR_REPOSITORY_HERE" # `org/repo` of the GitHub repository under test
+      gha_workflow_ids          = [] # WORKFLOWS_TEMPLATE: to reduce GitHub API call frequency and prevent rate limiting, add the workflow ID of the Aspect Workflows main GitHub Action
+      max_runners               = 50
+      min_runners               = 0
+      queue                     = "aspect-default"
+      resource_type             = "default"
+      scaling_polling_frequency = 2 # check for new jobs every 30s
+      warming                   = true
+    }
+    # The `small` runner group is used for the Setup Aspect Workflows pipeline step.
+    # These are intentionally small, inexpensive, long-lived instances that are not
+    # meant for running bazel tasks.
+    small = {
+      agent_idle_timeout_min    = 720
+      gh_repo                   = "YOUR_REPOSITORY_HERE" # `org/repo` of the GitHub repository under test
+      gha_workflow_ids          = [] # WORKFLOWS_TEMPLATE: to reduce GitHub API call frequency and prevent rate limiting, add the workflow ID of the Aspect Workflows main GitHub Action
+      max_runners               = 4
+      min_runners               = 0
+      queue                     = "aspect-small"
+      resource_type             = "small"
+      scaling_polling_frequency = 2     # check for new jobs every 30s
+      warming                   = false # no need to warm this runner since it doesn't run bazel
+    }
+    # The `warming` running group is used for the warming job to create warming
+    # archives used by other runner groups to pre-warm external repositories
+    # during bootstrap in order to speed up their first jobs.
+    warming = {
+      agent_idle_timeout_min = 1
+      gh_repo                = "YOUR_REPOSITORY_HERE" # `org/repo` of the GitHub repository under test
+      gha_workflow_ids       = [] # WORKFLOWS_TEMPLATE: to reduce GitHub API call frequency and prevent rate limiting, add the workflow ID of the Aspect Workflows warming GitHub Action
+      max_runners            = 1
+      min_runners            = 0
+policies               = { warming_manage : module.aspect_workflows.warming_management_policies["default"].arn }
+queue                  = "aspect-warming"
+      resource_type          = "default"
+      warming                = false # do not warm runners used to generate warming archives
+    }
+  }
+```
+```tf Buildkite
+bk_runner_groups = {
+    # The `default` runner group is used for general bazel tasks such as build & test.
+    default = {
+      agent_idle_timeout_min    = 120
+      max_runners               = 50
+      min_runners               = 0
+      queue                     = "aspect-default"
+      resource_type             = "default"
+      scaling_polling_frequency = 2 # check for new jobs every 30s
+      warming                   = true
+      # WORKFLOWS_TEMPLATE: You can add tags to the resources from a specific runner group.
+      # Note that workflows adds the following tag to all resources by default
+      #     "created-by": "aspect-workflows"
+      # tags = {
+      #   "some-runner-tag-key": "some-runner-tag-value"
+      # }
+    }
+    # The `small` runner group is used for the Setup Aspect Workflows pipeline step.
+    # These are intentionally small, inexpensive, long-lived instances that are not
+    # meant for running bazel tasks.
+    small = {
+      agent_idle_timeout_min    = 720
+      max_runners               = 4
+      min_runners               = 0
+      queue                     = "aspect-small"
+      resource_type             = "small"
+      scaling_polling_frequency = 2     # check for new jobs every 30s
+      warming                   = false # no need to warm this runner since it doesn't run bazel
+    }
+    # The `warming` running group is used for the warming job to create warming
+    # archives used by other runner groups to pre-warm external repositories
+    # during bootstrap in order to speed up their first jobs.
+    warming = {
+      agent_idle_timeout_min = 1
+      max_runners            = 1
+      min_runners            = 0
+queue                  = "aspect-warming"
+      resource_type          = "default"
+      warming                = false # do not warm runners used to generate warming archives
+    }
+```
+```tf CircleCI
+# CircleCI runner groups
+  cci_runner_groups = {
+    # The `default` runner group is used for general bazel tasks such as build & test.
+    default = {
+      agent_idle_timeout_min    = 120
+      max_runners               = 50
+      min_runners               = 0
+      resource_type             = "default"
+      scaling_polling_frequency = 2 # check for new jobs every 30s
+      warming                   = true
+    }
+    # The `warming` running group is used for the warming job to create warming
+    # archives used by other runner groups to pre-warm external repositories
+    # during bootstrap in order to speed up their first jobs.
+    warming = {
+      agent_idle_timeout_min = 1
+      max_runners            = 1
+      min_runners            = 0
+resource_type          = "default"
+      warming                = false # do not warm runners used to generate warming archives
+    }
+  }
+```
+```tf GitLab
+ gl_runner_groups = {
+    # The `default` runner group is used for general bazel tasks such as build & test.
+    default = {
+      agent_idle_timeout_min    = 120
+      max_runners               = 50
+      min_runners               = 0
+      project_id                = "GITLAB_PROJECT_ID" # Project ID of the GitLab repository under test
+      queue                     = "aspect-default"
+      resource_type             = "default"
+      scaling_polling_frequency = 2 # check for new jobs every 30s
+      warming                   = true
+    }
+    # The `small` runner group is used for the Setup Aspect Workflows pipeline step.
+    # These are intentionally small, inexpensive, long-lived instances that are not
+    # meant for running bazel tasks.
+    small = {
+      agent_idle_timeout_min    = 720
+      max_runners               = 4
+      min_runners               = 0
+      project_id                = "GITLAB_PROJECT_ID" # Project ID of the GitLab repository under test
+      queue                     = "aspect-small"
+      resource_type             = "small"
+      scaling_polling_frequency = 2     # check for new jobs every 30s
+      warming                   = false # no need to warm this runner since it doesn't run bazel
+    }
+    # The `warming` running group is used for the warming job to create warming
+    # archives used by other runner groups to pre-warm external repositories
+    # during bootstrap in order to speed up their first jobs.
+    warming = {
+      agent_idle_timeout_min = 1
+      max_runners            = 1
+      min_runners            = 0
+      project_id             = "GITLAB_PROJECT_ID" # Project ID of the GitLab repository under test
+queue                  = "aspect-warming"
+      resource_type          = "default"
+      warming                = false # do not warm runners used to generate warming archives
+    }
+  }
+```
+</CodeGroup>
+
+<Note>
+- For the GitHub Actions, you need to insert the repository in the org/repository format. For instance, `YourCompany/YourRepository`.
+- For the GitLab, you need to insert the project ID of the GitLab repository under test.
+- For the CircleCI, you need to insert the project ID of the CircleCI repository under test.
+- For the Buildkite, you need to insert the project ID of the Buildkite repository under test.
+</Note>
+
+### 4. Deploy Workflows
+
+After configuring the Terraform module, deploy the infrastructure to your GCP account.
+
+* Run `terraform apply` to create the infrastructure.
 
 **Key Points in the Code:**
 
@@ -123,43 +308,10 @@ provider "google-beta" {
 
 -----
 
-## 4. Run the Terraform workflow
-
-With the `main.tf` file saved, open your terminal in the same folder and run these three essential commands:
-
-**1. Initialize the Project:**
-
-The `init` command prepares your environment. It downloads the providers (`google`, `google-beta`) and connects to your GCS backend bucket.
-
-```bash
-terraform init
-```
-
-**2. Plan the Changes:**
-
-The `plan` command provides a preview of your infrastructure changes. It shows what will be created, changed, or destroyed in the cloud. This is a crucial safety step to prevent mistakes.
-
-```bash
-terraform plan
-```
-
-*(Since you haven't defined any resources yet, the plan will say "No changes. Infrastructure is up-to-date.")*
-
-**3. Apply the Changes:**
-
-The `apply` command executes the plan. It asks for a final confirmation (`yes`) before making any changes to your infrastructure.
-
-```bash
-terraform apply
-```
-
------
-
 ## Troubleshooting
 
   * **Project ID vs. Project Number**: Remember to use the Project ID string, not the numerical Project Number, in your Terraform files.
   * **State file management**: Always use a remote backend like a GCS bucket to avoid losing your state file or having security leaks.
-  * **Skipping `plan`**: Always run `terraform plan` before `terraform apply` to review the changes and catch errors early.
   * **Authentication**: If you're having permission issues, verify that your IAM user or role has the necessary permissions to perform the actions specified in your code.
 
 -----
